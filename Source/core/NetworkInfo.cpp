@@ -846,7 +846,7 @@ namespace Core {
                 SocketDatagram::Open(Core::infinite);
             }
             ~Observer() override {
-                Close(Core::infinite);
+                SocketDatagram::Close(Core::infinite);
             }
 
         public:
@@ -860,6 +860,16 @@ namespace Core {
             }
             void StateChange() override
             {
+            }
+            void Open()
+            {
+                if (SocketDatagram::IsOpen() != true) {
+                    SocketDatagram::Open(Core::infinite);
+                }
+            }
+            void Close()
+            {
+                SocketDatagram::Close(Core::infinite);
             }
 
         private:
@@ -1068,7 +1078,9 @@ namespace Core {
             : _adminLock()
             , _channel(ProxyType<Channel>::Create())
             , _networks()
+            , _observer(*this)
             , _observers()
+            , _refCount(0)
         {
             ASSERT(IsValid());
 
@@ -1138,8 +1150,30 @@ namespace Core {
         inline uint32_t Exchange(const Netlink& outbound, Netlink& inbound) {
             return(_channel->Exchange(outbound, inbound));
         }
+        void Open() {
+            AddRef();
+            _observer.Open();
+        }
+        void Close() {
+            if (Release() == 0) {
+                _observer.Close();
+            }
+        }
 
     private:
+        inline void AddRef() {
+            Core::InterlockedIncrement(_refCount);
+        }
+        inline uint32_t Release() {
+            _adminLock.Lock();
+            if (_refCount != 0) {
+                Core::InterlockedDecrement(_refCount);
+            }
+            uint32_t result = _refCount;
+            _adminLock.Unlock();
+            return result;
+        }
+
         void Add(const uint32_t id, const struct rtattr* data, const uint16_t length) {
             string interfaceName;
 
@@ -1194,7 +1228,9 @@ namespace Core {
         CriticalSection _adminLock;
         ProxyType<Channel> _channel;
         Map _networks;
+        Observer _observer;
         std::list<AdapterObserver::INotification*> _observers;
+        uint32_t _refCount;
     };
 
     Network::Network(const uint32_t index, const struct rtattr* iface, const uint32_t length)
@@ -1516,6 +1552,7 @@ namespace Core {
 
     uint32_t AdapterObserver::Open() {
 #ifndef __WINDOWS__
+        IPNetworks::Instance().Open();
         IPNetworks::Instance().Register(_callback);
 #endif
         return (Core::ERROR_NONE);
@@ -1524,6 +1561,7 @@ namespace Core {
     uint32_t AdapterObserver::Close() {
 #ifndef __WINDOWS__
         IPNetworks::Instance().Unregister(_callback);
+        IPNetworks::Instance().Close();
 #endif
         return (Core::ERROR_NONE);
     }
