@@ -1,4 +1,4 @@
- /*
+/*
  * If not stated otherwise in this file or this component's LICENSE file the
  * following copyright and licenses apply:
  *
@@ -21,12 +21,10 @@
 
 #include "Module.h"
 
-#include "../tracing/tracing.h"
-
 namespace WPEFramework {
-namespace ProcessContainers {
+namespace WarningReporting {
 
-    class EXTERNAL ProcessContainerization {
+    class EXTERNAL TooLongWaitingForLock {
     private:
         // -------------------------------------------------------------------
         // This object should not be copied or assigned. Prevent the copy
@@ -35,24 +33,38 @@ namespace ProcessContainers {
         // following statments.
         // Define them but do not implement them, compile error/link error.
         // -------------------------------------------------------------------
-        ProcessContainerization(const ProcessContainerization& a_Copy) = delete;
-        ProcessContainerization& operator=(const ProcessContainerization& a_RHS) = delete;
+        TooLongWaitingForLock(const TooLongWaitingForLock& a_Copy) = delete;
+        TooLongWaitingForLock& operator=(const TooLongWaitingForLock& a_RHS) = delete;
 
     public:
-        ProcessContainerization(const TCHAR formatter[], ...)
+
+        TooLongWaitingForLock(uint64_t duration, const TCHAR formatter[], ...)
+        : _text()
         {
+            std::string message;
+
             va_list ap;
             va_start(ap, formatter);
-            Core::Format(_text, formatter, ap);
+            Core::Format(message, formatter, ap);
             va_end(ap);
+            
+            _text = Core::Format(_T("duration %" PRIu64 "ms, %s"), duration, message.c_str());
         }
-        ProcessContainerization(const string& text)
-            : _text(Core::ToString(text))
+
+        explicit TooLongWaitingForLock(uint64_t duration)
+        : _text()
         {
+            _text = Core::Format(_T("duration %" PRIu64 "ms"), duration);
         }
-        ~ProcessContainerization() = default;
+
+        ~TooLongWaitingForLock() = default;
 
     public:
+
+        inline static uint64_t MaxAllowedDurationMs() {
+            return 50; // todo huppel make configurable
+        }
+
         inline const char* Data() const
         {
             return (_text.c_str());
@@ -63,10 +75,10 @@ namespace ProcessContainers {
         }
 
     private:
-        string _text;
+        std::string _text;
     };
 
+}
+} 
 
-} // ProcessContainers
-} // WPEFramework
 

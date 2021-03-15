@@ -575,7 +575,7 @@ int main(int argc, char** argv)
         TRACE_L1("Opening a trace file with ID: [%d].", options.Exchange);
 
         // Due to the LXC container support all ID's get mapped. For the TraceBuffer, use the host given ID.
-        Trace::TraceUnit::Instance().Open(options.Exchange);
+        Trace::TraceUnit::Instance().Open2(options.Exchange);
 
         // Time to open up the LOG tracings as specified by the caller.
         Logging::LoggingType<Logging::Startup>::Enable((options.EnabledLoggings & 0x00000001) != 0);
@@ -585,6 +585,10 @@ int main(int argc, char** argv)
         Logging::LoggingType<Logging::ParsingError>::Enable((options.EnabledLoggings & 0x00000010) != 0);
         Logging::LoggingType<Logging::Error>::Enable((options.EnabledLoggings & 0x00000020) != 0);
         Logging::LoggingType<Logging::Fatal>::Enable((options.EnabledLoggings & 0x00000040) != 0);
+
+#ifdef WARNING_REPORTING
+        WarningReporting::WarningReportingUnit::Instance().Open(options.Exchange);
+#endif
 
         if (remoteNode.IsValid()) {
             void* base = nullptr;

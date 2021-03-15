@@ -17,29 +17,26 @@
  * limitations under the License.
  */
 
-#ifndef __TRACEUNIT_H
-#define __TRACEUNIT_H
+#pragma once
 
 // ---- Include system wide include files ----
 
 // ---- Include local include files ----
-#include "ITraceMedia.h"
+#include "IWarningReportingMedia.h"
 #include "Module.h"
 
 // ---- Helper types and constants ----
 
 // ---- Helper functions ----
 namespace WPEFramework {
-namespace Trace {
-    // ---- Referenced classes and types ----
-    struct ITraceControl;
-    struct ITrace;
+
+namespace WarningReporting {
 
     constexpr uint32_t CyclicBufferSize = ((8 * 1024) - (sizeof(struct Core::CyclicBuffer::control))); /* 8Kb */
     extern EXTERNAL const TCHAR* CyclicBufferName;
 
     // ---- Class Definition ----
-    class EXTERNAL TraceUnit {
+    class EXTERNAL WarningReportingUnit : public IWarningReportingUnit {
     public:
         class Setting {
         public:
@@ -52,7 +49,7 @@ namespace Trace {
                     , Category()
                     , Enabled(false)
                 {
-                    Add(_T("module"), &Module);
+                    Add(_T("module"), &Module); // huppel todo: module heeft waarschijnlijk geen zin
                     Add(_T("category"), &Category);
                     Add(_T("enabled"), &Enabled);
                 }
@@ -139,8 +136,8 @@ namespace Trace {
 
     public:
         typedef std::list<Setting> Settings;
-        typedef std::list<ITraceControl*> TraceControlList;
-        typedef Core::IteratorType<TraceControlList, ITraceControl*> Iterator;
+        typedef std::list<IWarningReportingControl*> ControlList;
+        typedef Core::IteratorType<ControlList, IWarningReportingControl*> Iterator;
 
     private:
         // -------------------------------------------------------------------
@@ -150,18 +147,17 @@ namespace Trace {
         // following statements.
         // Define them but do not implement them, compile error/link error.
         // -------------------------------------------------------------------
-        TraceUnit(const TraceUnit&) = delete;
-        TraceUnit& operator=(const TraceUnit&) = delete;
+        WarningReportingUnit(const WarningReportingUnit&) = delete;
+        WarningReportingUnit& operator=(const WarningReportingUnit&) = delete;
 
-        class EXTERNAL TraceBuffer : public Core::CyclicBuffer {
-        private:
-            TraceBuffer() = delete;
-            TraceBuffer(const TraceBuffer&) = delete;
-            TraceBuffer& operator=(const TraceBuffer&) = delete;
+        class EXTERNAL ReportingBuffer : public Core::CyclicBuffer {
 
         public:
-            TraceBuffer(const string& doorBell, const string& name);
-            ~TraceBuffer();
+            ReportingBuffer(const ReportingBuffer&) = delete;
+            ReportingBuffer& operator=(const ReportingBuffer&) = delete;
+
+            ReportingBuffer(const string& doorBell, const string& name);
+            ~ReportingBuffer();
 
         public:
             virtual uint32_t GetOverwriteSize(Cursor& cursor) override;
@@ -187,40 +183,40 @@ namespace Trace {
         };
 
     protected:
-        TraceUnit();
+        WarningReportingUnit();
 
     public:
-        virtual ~TraceUnit();
+        ~WarningReportingUnit() override;
 
     public:
-        static TraceUnit& Instance();
+        static WarningReportingUnit& Instance();
 
-        uint32_t Open2(const uint32_t identifier);
-        uint32_t Open2(const string& pathName);
-        uint32_t Close2();
+        uint32_t Open(const uint32_t identifier);
+        uint32_t Open(const string& pathName);
+        uint32_t Close();
 
-        void Announce(ITraceControl& Category);
-        void Revoke(ITraceControl& Category);
+        void Announce(IWarningReportingControl& Category) override;
+        void Revoke(IWarningReportingControl& Category) override;
         Iterator GetCategories();
         uint32_t SetCategories(const bool enable, const char* module, const char* category);
 
         // Default enabled/disabled categories: set via config.json.
-        bool IsDefaultCategory(const string& module, const string& category, bool& enabled) const;
+        bool IsDefaultCategory(const string& module, const string& category, bool& enabled) const override;
         string Defaults() const;
-        void Defaults2(const string& jsonCategories);
-        void Defaults2(Core::File& file);
+        void Defaults(const string& jsonCategories);
+        void Defaults(Core::File& file);
 
-        void Trace(const char fileName[], const uint32_t lineNumber, const char className[], const ITrace* const information);
+        void ReportWarning(const char module[], const char fileName[], const uint32_t lineNumber, const char className[], const IWarning* const information) override;
 
         inline Core::CyclicBuffer* CyclicBuffer()
         {
             return (m_OutputChannel);
         }
-        inline bool HasDirectOutput2() const
+        inline bool HasDirectOutput() const
         {
             return (m_DirectOut);
         }
-        inline void DirectOutput2(const bool enabled)
+        inline void DirectOutput(const bool enabled)
         {
             m_DirectOut = enabled;
         }
@@ -242,25 +238,31 @@ namespace Trace {
         }
 
     private:
-        inline uint32_t Open2(const string& doorBell, const string& fileName) 
+        inline uint32_t Open(const string& doorBell, const string& fileName) 
         {
+
+            /*  huppel todo: onoy report localy for testing purposes
+
             ASSERT(m_OutputChannel == nullptr);
 
-            m_OutputChannel = new TraceBuffer(doorBell, fileName);
+            m_OutputChannel = new ReportingBuffer(doorBell, fileName);
 
             ASSERT(m_OutputChannel->IsValid() == true);
 
             return (m_OutputChannel->IsValid() ? Core::ERROR_NONE : Core::ERROR_UNAVAILABLE);
+
+            */
+            DirectOutput(true);
+            return Core::ERROR_NONE;
+
         }
         void UpdateEnabledCategories(const Core::JSON::ArrayType<Setting::JSON>& info);
 
-        TraceControlList m_Categories;
+        ControlList m_Categories;
         Core::CriticalSection m_Admin;
-        TraceBuffer* m_OutputChannel;
+        ReportingBuffer* m_OutputChannel;
         Settings m_EnabledCategories;
         bool m_DirectOut;
     };
 }
-} // namespace Trace
-
-#endif // __TRACEUNIT_H
+} 

@@ -24,6 +24,7 @@
 #include "SystemInfo.h"
 #include "Config.h"
 #include "IRemoteInstantiation.h"
+#include "WarningReportingControl.h"
 
 #ifdef PROCESSCONTAINERS_ENABLED
 #include "../processcontainers/ProcessContainer.h"
@@ -173,7 +174,7 @@ namespace PluginHost {
             {
                 va_list ap;
                 va_start(ap, formatter);
-                Trace::Format(_text, formatter, ap);
+                Core::Format(_text, formatter, ap);
                 va_end(ap);
             }
             Activity(const string& text)
@@ -2023,21 +2024,33 @@ namespace PluginHost {
                     _ID = id;
                     _service = service;
                 }
-                string Process(const string& message)
+                string Process2(const string& message)
                 {
-                    return (_service->Inbound(_ID, message));
+                    string result;
+//                    return (_service->Inbound(_ID, message));
+REPORT_DURATION_WARNING( { result = _service->Inbound(_ID, message); }, WarningReporting::TooLongWaitingForLock, _T("Process2(const string&)"));  // huppel todo just testing now
+                    return result;
                 }
-                Core::ProxyType<Core::JSONRPC::Message> Process(const string& token, const Core::ProxyType<Core::JSONRPC::Message>& message)
+                Core::ProxyType<Core::JSONRPC::Message> Process2(const string& token, const Core::ProxyType<Core::JSONRPC::Message>& message)
                 {
-                    return (_service->Invoke(token, _ID, *message));
+                    Core::ProxyType<Core::JSONRPC::Message> result;
+REPORT_DURATION_WARNING( { result = _service->Invoke(token, _ID, *message); }, WarningReporting::TooLongWaitingForLock, _T("Process2(const string& token, const Core::ProxyType<Core::JSONRPC::Message>&"));  // huppel todo just testing now
+//                    return (_service->Invoke(token, _ID, *message));
+                    return result;
                 }
-                Core::ProxyType<Web::Response> Process(const Core::ProxyType<Web::Request>& message)
+                Core::ProxyType<Web::Response> Process2(const Core::ProxyType<Web::Request>& message)
                 {
-                    return (_service->Process(*message));
+                    Core::ProxyType<Web::Response> result;
+//                    return (_service->Process(*message));
+REPORT_DURATION_WARNING( { result = _service->Process(*message); }, WarningReporting::TooLongWaitingForLock, _T("Process2(const Core::ProxyType<Web::Request>&"));  // huppel todo just testing now
+                        return result;
                 }
-                Core::ProxyType<Core::JSON::IElement> Process(const Core::ProxyType<Core::JSON::IElement>& message)
+                Core::ProxyType<Core::JSON::IElement> Process2(const Core::ProxyType<Core::JSON::IElement>& message)
                 {
-                    return (_service->Inbound(_ID, message));
+                    Core::ProxyType<Core::JSON::IElement> result;
+REPORT_DURATION_WARNING( { result = _service->Inbound(_ID, message); }, WarningReporting::TooLongWaitingForLock, _T("Process2(const Core::ProxyType<Core::JSON::IElement>&"));  // huppel todo just testing now
+//                    return (_service->Inbound(_ID, message));
+                    return result;
                 }
                 template <typename PACKAGE>
                 void Submit(PACKAGE package)
@@ -2046,6 +2059,10 @@ namespace PluginHost {
                 }
                 void RequestClose() {
                     _server->Dispatcher().RequestClose(_ID);
+                }
+                string Callsign() const {
+                    ASSERT(_service.IsValid() == true);
+                    return _service->Callsign();
                 }
 
             private:
@@ -2092,8 +2109,11 @@ namespace PluginHost {
                 }
                 void Dispatch() override
                 {
+                    
                     ASSERT(_request.IsValid());
                     ASSERT(Job::HasService() == true);
+
+                    REPORT_WARNING_THREAD_SETCALLSIGN(Callsign().c_str())
 
                     Core::ProxyType<Web::Response> response;
 
@@ -2101,7 +2121,7 @@ namespace PluginHost {
                         Core::ProxyType<Core::JSONRPC::Message> message(_request->Body<Core::JSONRPC::Message>());
 
                         if (message->IsSet()) {
-                            Core::ProxyType<Core::JSONRPC::Message> body = Job::Process(_token, message);
+                            Core::ProxyType<Core::JSONRPC::Message> body = Job::Process2(_token, message);
 
                             // If we have no response body, it looks like an async-call...
                             if (body.IsValid() == false) {
@@ -2127,7 +2147,7 @@ namespace PluginHost {
                             response->Message = _T("Failed to parse JSONRPC message");
                         }
                     } else {
-                        response = Job::Process(_request);
+                        response = Job::Process2(_request);
                         if (response.IsValid() == false) {
                             response = _missingResponse;
                         }
@@ -2152,6 +2172,7 @@ namespace PluginHost {
                     _request.Release();
 
                     Job::Clear();
+                    
                 }
 
             private:
@@ -2198,6 +2219,8 @@ namespace PluginHost {
                     ASSERT(Job::HasService() == true);
                     ASSERT(_element.IsValid() == true);
 
+                    REPORT_WARNING_THREAD_SETCALLSIGN(Callsign().c_str())
+
                     if (_jsonrpc == true) {
 #if THUNDER_PERFORMANCE
                         Core::ProxyType<TrackingJSONRPC> tracking (Core::proxy_cast<TrackingJSONRPC>(_element));
@@ -2207,14 +2230,14 @@ namespace PluginHost {
                         Core::ProxyType<Core::JSONRPC::Message> message(Core::proxy_cast<Core::JSONRPC::Message>(_element));
                         ASSERT(message.IsValid() == true);
 
-                        _element = Core::ProxyType<Core::JSON::IElement>(Job::Process(_token, message));
+                        _element = Core::ProxyType<Core::JSON::IElement>(Job::Process2(_token, message));
 
 #if THUNDER_PERFORMANCE
 			tracking->Execution();
 #endif
 
                     } else {
-                        _element = Job::Process(_element);
+                        _element = Job::Process2(_element);
                     }
 
                     if (_element.IsValid()) {
@@ -2256,7 +2279,9 @@ namespace PluginHost {
                 {
                     ASSERT(HasService() == true);
 
-                    _text = Job::Process(_text);
+                    REPORT_WARNING_THREAD_SETCALLSIGN(Callsign().c_str())
+
+                    _text = Job::Process2(_text);
 
                     if (_text.empty() == false) {
                         // Fire and forget, We are done !!!

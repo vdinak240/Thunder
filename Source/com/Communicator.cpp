@@ -496,7 +496,7 @@ namespace RPC {
             string jsonDefaultCategories(announceMessage->Response().TraceCategories());
 
             if (jsonDefaultCategories.empty() == false) {
-                Trace::TraceUnit::Instance().Defaults(jsonDefaultCategories);
+                Trace::TraceUnit::Instance().Defaults2(jsonDefaultCategories);
             }
 
             _connectionId = announceMessage->Response().SequenceNumber();

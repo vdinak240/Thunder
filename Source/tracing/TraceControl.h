@@ -81,7 +81,7 @@ namespace Trace {
 
             TraceControl()
                 : m_CategoryName(Core::ClassNameOnly(typeid(CONTROLCATEGORY).name()).Text())
-                , m_Enabled(0x02)
+                , m_Enabled2(0x02)
             {
                 // Register Our trace control unit, so it can be influenced from the outside
                 // if nessecary..
@@ -91,7 +91,7 @@ namespace Trace {
                 if (TraceUnit::Instance().IsDefaultCategory(*CONTROLMODULE, m_CategoryName, enabled)) {
                     if (enabled) {
                         // Better not to use virtual Enabled(...), because derived classes aren't finished yet.
-                        m_Enabled = m_Enabled | 0x01;
+                        m_Enabled2 = m_Enabled2 | 0x01;
                     }
                 }
             }
@@ -103,7 +103,7 @@ namespace Trace {
         public:
             inline bool IsEnabled() const
             {
-                return ((m_Enabled & 0x01) != 0);
+                return ((m_Enabled2 & 0x01) != 0);
             }
             virtual const char* Category() const
             {
@@ -119,21 +119,21 @@ namespace Trace {
             }
             virtual void Enabled(const bool enabled)
             {
-                m_Enabled = (m_Enabled & 0xFE) | (enabled ? 0x01 : 0x00);
+                m_Enabled2 = (m_Enabled2 & 0xFE) | (enabled ? 0x01 : 0x00);
             }
             virtual void Destroy()
             {
-                if ((m_Enabled & 0x02) != 0) {
+                if ((m_Enabled2 & 0x02) != 0) {
                     // Register Our trace control unit, so it can be influenced from the outside
                     // if nessecary..
                     TraceUnit::Instance().Revoke(*this);
-                    m_Enabled = 0;
+                    m_Enabled2 = 0;
                 }
             }
 
         protected:
             const string m_CategoryName;
-            uint8_t m_Enabled;
+            uint8_t m_Enabled2;
         };
 
 

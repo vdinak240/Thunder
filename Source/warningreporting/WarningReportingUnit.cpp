@@ -17,27 +17,26 @@
  * limitations under the License.
  */
 
-#include "TraceUnit.h"
-#include "TraceCategories.h"
-#include "Logging.h"
+#include "WarningReportingUnit.h"
 
-#define TRACE_CYCLIC_BUFFER_FILENAME _T("TRACE_FILENAME")
-#define TRACE_CYCLIC_BUFFER_DOORBELL _T("TRACE_DOORBELL")
+#define WARNINGREPORTING_CYCLIC_BUFFER_FILENAME _T("WARNINGREPORTING_FILENAME")
+#define WARNINGREPORTING_CYCLIC_BUFFER_DOORBELL _T("WARNINGREPORTING_DOORBELL")
 
 namespace WPEFramework {
-namespace Trace {
+namespace WarningReporting {
 
-    /* static */ const TCHAR* CyclicBufferName = _T("tracebuffer");
+    /* static */ const TCHAR* CyclicBufferName = _T("warningreportingbuffer");
 
-    TraceUnit::TraceUnit()
+    WarningReportingUnit::WarningReportingUnit()
         : m_Categories()
         , m_Admin()
         , m_OutputChannel(nullptr)
         , m_DirectOut(false)
     {
+        WarningReportingUnitProxy::Instance().Handler(this);
     }
 
-    TraceUnit::TraceBuffer::TraceBuffer(const string& doorBell, const string& name)
+    WarningReportingUnit::ReportingBuffer::ReportingBuffer(const string& doorBell, const string& name)
         : Core::CyclicBuffer(name, 
                                 Core::File::USER_READ    | 
                                 Core::File::USER_WRITE   | 
@@ -51,21 +50,21 @@ namespace Trace {
         , _doorBell(doorBell.c_str())
     {
         // Make sure the trace file opened proeprly.
-        TRACE_L1("Opened a file to stash my traces at: %s [%d] and doorbell: %s", name.c_str(), CyclicBufferSize, doorBell.c_str());
+        TRACE_L1("Opened a file to stash my reported warning at: %s [%d] and doorbell: %s", name.c_str(), CyclicBufferSize, doorBell.c_str());
         ASSERT (IsValid() == true);
     }
 
-    TraceUnit::TraceBuffer::~TraceBuffer()
+    WarningReportingUnit::ReportingBuffer::~ReportingBuffer()
     {
     }
 
-    /* virtual */ uint32_t TraceUnit::TraceBuffer::GetOverwriteSize(Cursor& cursor)
+    /* virtual */ uint32_t WarningReportingUnit::ReportingBuffer::GetOverwriteSize(Cursor& cursor)
     {
         while (cursor.Offset() < cursor.Size()) {
             uint16_t chunkSize = 0;
             cursor.Peek(chunkSize);
 
-            TRACE_L1("Flushing TRACE data !!! %d", __LINE__);
+            TRACE_L1("Flushing warning reporting data !!! %d", __LINE__);
 
             cursor.Forward(chunkSize);
         }
@@ -73,22 +72,25 @@ namespace Trace {
         return cursor.Offset();
     }
 
-    /* virtual */ void TraceUnit::TraceBuffer::DataAvailable()
+    /* virtual */ void WarningReportingUnit::ReportingBuffer::DataAvailable()
     {
         _doorBell.Ring();
     }
 
-    /* static */ TraceUnit& TraceUnit::Instance()
+    /* static */ WarningReportingUnit& WarningReportingUnit::Instance()
     {
-        return (Core::SingletonType<TraceUnit>::Instance());
+        return (Core::SingletonType<WarningReportingUnit>::Instance());
     }
 
-    TraceUnit::~TraceUnit()
+    WarningReportingUnit::~WarningReportingUnit()
     {
+
+        WarningReportingUnitProxy::Instance().Handler(nullptr);
+
         m_Admin.Lock();
 
         if (m_OutputChannel != nullptr) {
-            Close2();
+            Close();
         }
 
         while (m_Categories.size() != 0) {
@@ -98,14 +100,14 @@ namespace Trace {
         m_Admin.Unlock();
     }
 
-    uint32_t TraceUnit::Open2(const uint32_t identifier)
+    uint32_t WarningReportingUnit::Open(const uint32_t identifier)
     {
         uint32_t result = Core::ERROR_UNAVAILABLE;
 
         string fileName;
         string doorBell;
-        Core::SystemInfo::GetEnvironment(TRACE_CYCLIC_BUFFER_FILENAME, fileName);
-        Core::SystemInfo::GetEnvironment(TRACE_CYCLIC_BUFFER_DOORBELL, doorBell);
+        Core::SystemInfo::GetEnvironment(WARNINGREPORTING_CYCLIC_BUFFER_FILENAME, fileName);
+        Core::SystemInfo::GetEnvironment(WARNINGREPORTING_CYCLIC_BUFFER_DOORBELL, doorBell);
 
         ASSERT(fileName.empty() == false);
         ASSERT(doorBell.empty() == false);
@@ -113,28 +115,28 @@ namespace Trace {
         if (fileName.empty() == false) {
        
             fileName +=  '.' + Core::NumberType<uint32_t>(identifier).Text();
-            result = Open2(doorBell, fileName);
+            result = Open(doorBell, fileName);
         }
 
         return (result);
     }
 
-    uint32_t TraceUnit::Open2(const string& pathName)
+    uint32_t WarningReportingUnit::Open(const string& pathName)
     {
         string fileName(Core::Directory::Normalize(pathName) + CyclicBufferName);
         #ifdef __WINDOWS__
-        string doorBell("127.0.0.1:62001");
+        string doorBell("127.0.0.1:62002"); // huppel todo: is deze vrij?
         #else
         string doorBell(Core::Directory::Normalize(pathName) + CyclicBufferName + ".doorbell" );
         #endif
 
-        Core::SystemInfo::SetEnvironment(TRACE_CYCLIC_BUFFER_FILENAME, fileName);
-        Core::SystemInfo::SetEnvironment(TRACE_CYCLIC_BUFFER_DOORBELL, doorBell);
+        Core::SystemInfo::SetEnvironment(WARNINGREPORTING_CYCLIC_BUFFER_FILENAME, fileName);
+        Core::SystemInfo::SetEnvironment(WARNINGREPORTING_CYCLIC_BUFFER_DOORBELL, doorBell);
 
-        return (Open2(doorBell, fileName));
+        return (Open(doorBell, fileName));
     }
 
-    uint32_t TraceUnit::Close2()
+    uint32_t WarningReportingUnit::Close()
     {
         m_Admin.Lock();
 
@@ -151,7 +153,7 @@ namespace Trace {
         return (Core::ERROR_NONE);
     }
 
-    void TraceUnit::Announce(ITraceControl& Category)
+    void WarningReportingUnit::Announce(IWarningReportingControl& Category)
     {
         m_Admin.Lock();
 
@@ -160,11 +162,11 @@ namespace Trace {
         m_Admin.Unlock();
     }
 
-    void TraceUnit::Revoke(ITraceControl& Category)
+    void WarningReportingUnit::Revoke(IWarningReportingControl& Category)
     {
         m_Admin.Lock();
 
-        std::list<ITraceControl*>::iterator index(std::find(m_Categories.begin(), m_Categories.end(), &Category));
+        std::list<IWarningReportingControl*>::iterator index(std::find(m_Categories.begin(), m_Categories.end(), &Category));
 
         if (index != m_Categories.end()) {
             m_Categories.erase(index);
@@ -173,16 +175,16 @@ namespace Trace {
         m_Admin.Unlock();
     }
 
-    TraceUnit::Iterator TraceUnit::GetCategories()
+    WarningReportingUnit::Iterator WarningReportingUnit::GetCategories()
     {
         return (Iterator(m_Categories));
     }
 
-    uint32_t TraceUnit::SetCategories(const bool enable, const char* module, const char* category)
+    uint32_t WarningReportingUnit::SetCategories(const bool enable, const char* module, const char* category)
     {
         uint32_t modifications = 0;
 
-        TraceControlList::iterator index(m_Categories.begin());
+        ControlList::iterator index(m_Categories.begin());
 
         while (index != m_Categories.end()) {
             const char* thisModule = (*index)->Module();
@@ -213,7 +215,7 @@ namespace Trace {
         return (modifications);
     }
 
-    string TraceUnit::Defaults() const
+    string WarningReportingUnit::Defaults() const
     {
         string result;
         Core::JSON::ArrayType<Setting::JSON> serialized;
@@ -228,7 +230,7 @@ namespace Trace {
         return (result);
     }
 
-    void TraceUnit::Defaults2(const string& jsonCategories)
+    void WarningReportingUnit::Defaults(const string& jsonCategories)
     {
         Core::JSON::ArrayType<Setting::JSON> serialized;
         Core::OptionalType<Core::JSON::Error> error;
@@ -241,7 +243,7 @@ namespace Trace {
         UpdateEnabledCategories(serialized);
     }
 
-    void TraceUnit::Defaults2(Core::File& file) {
+    void WarningReportingUnit::Defaults(Core::File& file) {
         Core::JSON::ArrayType<Setting::JSON> serialized;
         Core::OptionalType<Core::JSON::Error> error;
         serialized.IElement::FromFile(file, error);
@@ -253,7 +255,7 @@ namespace Trace {
         UpdateEnabledCategories(serialized);
     }
 
-    void TraceUnit::UpdateEnabledCategories(const Core::JSON::ArrayType<Setting::JSON>& info)
+    void WarningReportingUnit::UpdateEnabledCategories(const Core::JSON::ArrayType<Setting::JSON>& info)
     {
         Core::JSON::ArrayType<Setting::JSON>::ConstIterator index = info.Elements();
 
@@ -263,7 +265,7 @@ namespace Trace {
             m_EnabledCategories.emplace_back(Setting(index.Current()));
         }
 
-        for (ITraceControl* traceControl : m_Categories) {
+        for (IWarningReportingControl* traceControl : m_Categories) {
             Settings::const_iterator index = m_EnabledCategories.begin();
             while (index != m_EnabledCategories.end()) {
                 const Setting& setting = *index;
@@ -280,7 +282,7 @@ namespace Trace {
         }
     }
 
-    bool TraceUnit::IsDefaultCategory(const string& module, const string& category, bool& enabled) const
+    bool WarningReportingUnit::IsDefaultCategory(const string& module, const string& category, bool& enabled) const
     {
         bool isDefaultCategory = false;
 
@@ -300,8 +302,11 @@ namespace Trace {
         return isDefaultCategory;
     }
 
-    void TraceUnit::Trace(const char file[], const uint32_t lineNumber, const char className[], const ITrace* const information)
+    void WarningReportingUnit::ReportWarning(const char module[], const char file[], const uint32_t lineNumber, const char className[], const IWarning* const information)
     {
+
+        // huppel todo: module is now a hack, not put on the buffer, how do we deal with that and the 'real' module
+
         const char* fileName(Core::FileNameOnly(file));
 
         m_Admin.Lock();
@@ -352,11 +357,11 @@ namespace Trace {
             string time(Core::Time::Now().ToRFC1123(true));
             Core::TextFragment cleanClassName(Core::ClassNameOnly(className));
 
-            fprintf(stdout, "[%s]:[%s:%d]:[%s] %s: %s\n", time.c_str(), fileName, lineNumber, cleanClassName.Data(), information->Category(), information->Data());
+            fprintf(stdout, "[%s]:[%s:%s][%s:%d]:[%s] %s: %s\n", time.c_str(), module, information->Module(), fileName, lineNumber, cleanClassName.Data(), information->Category(), information->Data());
             fflush(stdout);
         }
 
         m_Admin.Unlock();
     }
 }
-} // namespace WPEFramework::Trace
+} 

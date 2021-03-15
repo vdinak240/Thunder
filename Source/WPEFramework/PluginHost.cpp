@@ -199,7 +199,11 @@ namespace PluginHost {
 #endif
 
                 // Do not forget to close the Tracing stuff...
-                Trace::TraceUnit::Instance().Close();
+                Trace::TraceUnit::Instance().Close2();
+
+#ifdef WARNING_REPORTING
+        WarningReporting::WarningReportingUnit::Instance().Close();
+#endif
 
                 // Now clear all singeltons we created.
                 Core::Singleton::Dispose();
@@ -426,7 +430,7 @@ namespace PluginHost {
 
             // Time to open up, the trace buffer for this process and define it for the out-of-proccess systems
             // Define the environment variable for Tracing files, if it is not already set.
-            if ( Trace::TraceUnit::Instance().Open(_config->VolatilePath()) != Core::ERROR_NONE){
+            if ( Trace::TraceUnit::Instance().Open2(_config->VolatilePath()) != Core::ERROR_NONE){
 #ifndef __WINDOWS__
                 if (_background == true) {
                     syslog(LOG_WARNING, EXPAND_AND_QUOTE(APPLICATION_NAME) " Could not enable trace functionality!");
@@ -444,12 +448,25 @@ namespace PluginHost {
                 Core::File input (traceSettings, true);
 
                 if (input.Open(true)) {
-                    Trace::TraceUnit::Instance().Defaults(input);
+                    Trace::TraceUnit::Instance().Defaults2(input);
                 }
             }
             else {
-                Trace::TraceUnit::Instance().Defaults(_config->TraceCategories());
+                Trace::TraceUnit::Instance().Defaults2(_config->TraceCategories());
             }
+
+#ifdef WARNING_REPORTING
+            if ( WarningReporting::WarningReportingUnit::Instance().Open(_config->VolatilePath()) != Core::ERROR_NONE){
+#ifndef __WINDOWS__
+                if (_background == true) {
+                    syslog(LOG_WARNING, EXPAND_AND_QUOTE(APPLICATION_NAME) " Could not enable issue reporting functionality!");
+                } else
+#endif
+                {
+                    fprintf(stdout, "Could not enable issue reporting functionality!\n");
+                }
+            }
+#endif
 
             SYSLOG(Logging::Startup, (_T(EXPAND_AND_QUOTE(APPLICATION_NAME))));
             SYSLOG(Logging::Startup, (_T("Starting time: %s"), Core::Time::Now().ToRFC1123(false).c_str()));
