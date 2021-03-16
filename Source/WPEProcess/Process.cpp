@@ -366,12 +366,16 @@ public:
         struct sigaction sa;
         memset(&sa, 0, sizeof(struct sigaction));
         sigemptyset(&sa.sa_mask);
-        sa.sa_handler = ExitDaemonHandler;
-        sa.sa_flags = 0; // not SA_RESTART!;
+        //sa.sa_handler = ExitDaemonHandler;
+        //sa.sa_flags = 0; // not SA_RESTART!;
+        sa.sa_sigaction = signal_handler;
+        sa.sa_flags = SA_SIGINFO;
+
 
         sigaction(SIGINT, &sa, nullptr);
         sigaction(SIGTERM, &sa, nullptr);
         sigaction(SIGQUIT, &sa, nullptr);
+        sigaction(SIGFPE, &sa,nullptr);
         #endif
     }
     virtual ~ProcessFlow()
@@ -463,6 +467,31 @@ public:
 
 private:
     #ifndef __WINDOWS__
+     static void signal_handler(int signo, siginfo_t *info, void *secret)
+    {
+        TRACE_L1("Signal received %d.", signo);
+        syslog(LOG_NOTICE, "Signal received %d.", signo);
+
+         if ((signo == SIGTERM) || (signo == SIGQUIT)) {
+
+             ProcessFlow::Abort();
+
+        }else if (signo == SIGSEGV) {
+            DumpCallStack(0, nullptr);
+            // now invoke the default segfault handler
+            signal(signo, SIG_DFL);
+            kill(getpid(), signo);
+        }
+        else if (signo == SIGFPE)
+        {
+          //cout<<"sigfpe received\n";
+           syslog(LOG_NOTICE, "Signal SIGFPE received from process id :%d\n",info->si_pid);
+          //cout<<"signal received from  process id\n"<<info->si_pid;
+          //cout<<"user id\n"<<info->si_uid;
+          signal(signo, SIG_DFL);
+          kill(getpid(), signo);
+        }
+    }
     static void ExitDaemonHandler(int signo)
     {
         TRACE_L1("Signal received %d.", signo);
